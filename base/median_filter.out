@@ -1,0 +1,19 @@
+ plgrid/libs/codecs/1.0 loaded.
+ plgrid/tools/yasm/1.3.0 loaded.
+ plgrid/tools/ffmpeg/3.2.2 loaded.
+ plgrid/libs/qt/5.4.1 loaded.
+ plgrid/libs/mkl/11.3.1 loaded.
+ plgrid/tools/gcc/4.9.2 loaded.
+ plgrid/tools/intel/15.0.2 loaded.
+ plgrid/tools/python/2.7.9 loaded.
+ plgrid/apps/cuda/7.5 loaded.
+ plgrid/libs/opencv/3.2.0 loaded.
+ plgrid/tools/gcc/4.9.2 unloaded.
+ plgrid/tools/gcc/8.2.0 loaded.
+g++ median_filter_normal.cpp -o median_filter_normal -I/net/software/local/opencv/3.2.0/include -L/net/software/local/opencv/3.2.0/lib -lopencv_core -lopencv_imgcodecs -lfreeimage
+median_filter_normal.cpp:7:10: fatal error: FreeImage.h: No such file or directory
+ #include "FreeImage.h"
+          ^~~~~~~~~~~~~
+compilation terminated.
+make: *** [medial_filter] Error 1
+/var/spool/slurmd/job5491754/slurm_script: line 12: ./medial_filter_normal: No such file or directory
