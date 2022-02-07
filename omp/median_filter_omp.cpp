@@ -1,15 +1,29 @@
-#include <iostream>
+#include <omp.h>
 #include <string>
 #include <cstring>
+#include <chrono>
 
 #include <opencv2/opencv.hpp>
 #include "opencv2/core.hpp"
 #include "opencv2/imgcodecs.hpp"
 
+void bubbleSort(uchar* buffer, size_t bufferSize)
+{
+    
+    for(size_t i = 0; i <bufferSize; ++i){
+        for(size_t j = i + 1; j < bufferSize; ++j){
+            if(buffer[i] > buffer[j]){
+                uchar tmp = buffer[i];
+                buffer[i] = buffer[j];
+                buffer[j] = tmp; 
+            }
+        }
+    }
+}
+
 int main(int argc, char** argv)
 {
-
-    if(argc > 4)
+    if(argc >= 4)
     {
         cv::Mat img;
         img = cv::imread(argv[3]);
@@ -28,39 +42,35 @@ int main(int argc, char** argv)
         int channels = img.channels();
 
         uchar *image_uchar = img.data;
-        // uchar temp[window_rows * window_cols] = {};
-        for(size_t row = 0; row < height; ++row)
+        uchar temp[window_rows * window_cols] = {0};
+
+        size_t row = 0;
+        size_t col = 0;
+        size_t ch = 0;
+        size_t x = 0;
+        size_t y = 0;
+        auto start = std::chrono::steady_clock::now();
+        #pragma omp parallel private(row, col, ch, temp) 
         {
-            for(size_t col = 0; col < width; ++col)
-            {
-                // std::memset(temp, 0, window_rows * window_cols);
-                // uchar temp[window_rows * window_cols] = {0};
-                for(size_t ch = 0; ch < channels; ++ch)
-                {
-                    uchar temp[window_rows * window_cols] = {0};
-                    for(size_t x = 0; x < window_rows; ++x)
-                    {
-                        for(size_t y = 0; y < window_cols; ++y)
-                        {
-                            temp[x * window_cols + y] = image_uchar[(row + x - 1) * width * channels + (col + y - 1) * channels + ch];
-                        }
-                    }
-                    for(size_t i = 0; i < window_rows * window_cols; ++i)
-                    {
-                        for(size_t j = i + 1; j < window_rows * window_cols; ++j)
-                        {
-                            if(temp[i] > temp[j])
-                            {
-                                uchar tmp = temp[i];
-                                temp[i] = temp[j];
-                                temp[j] = tmp; 
+            #pragma omp for schedule(dynamic, 1)
+            for(row = window_rows / 2; row < height - window_rows / 2; ++row){
+                for(col = window_cols / 2; col < width - window_cols / 2; ++col){
+                    for(ch = 0; ch < channels; ++ch){
+                        // fill window with data from input image
+                        for(x = 0; x < window_rows; ++x){
+                            for(y = 0; y < window_cols; ++y){
+                                temp[x * window_cols + y] = image_uchar[(row + x - 1) * width * channels + (col + y - 1) * channels + ch];
                             }
                         }
+                        // bubble sort pixel window
+                        bubbleSort(temp, window_rows * window_cols);
+                        image_uchar[row * width * channels + col * channels + ch] = temp[(window_rows * window_cols) / 2];
                     }
-                    image_uchar[row * width * channels + col * channels + ch] = temp[(window_rows * window_cols) / 2];
                 }
             }
         }
+        auto end = std::chrono::steady_clock::now();
+        std::cout << "Elapsed time in milliseconds: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << " ms" << std::endl;
         cv::Mat output_image = cv::Mat(height, width, img.type(), image_uchar);
 
         if(5 == argc)
