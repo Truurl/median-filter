@@ -7,8 +7,6 @@
 #SBATCH --output=median_filter.out
 cd $HOME/median-filter/base
 module -q add plgrid/libs/opencv
-sleep 10
 module -q add plgrid/tools/gcc/8.2.0
-sleep 10
 make
 ./median_filter_normal
