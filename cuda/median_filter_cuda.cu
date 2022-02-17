@@ -8,8 +8,7 @@
 #include "opencv2/cudaimgproc.hpp"
 #include "opencv2/imgcodecs.hpp"
 
-#define BLOCK_WIDTH (16)
-#define BLOCK_HEIGHT (16)
+#define BLOCK_SIZE (64)
 
 void bubbleSort(uchar* buffer, size_t bufferSize)
 {
@@ -61,6 +60,178 @@ __global__ void medianFilter(unsigned char* inputImage, unsigned char* outputIma
         }
         delete window;
     }
+}
+
+__global__ void medianFilterShared(unsigned char* inputImage, unsigned char* outputImage, int imageWidth, int imageHeight, int channels, int windowWidth, int windowsHeight)
+{
+    
+    const int y = blockDim.y * blockIdx.y + threadIdx.y;
+    const int x = blockDim.x * blockIdx.x + threadIdx.x;
+
+    __shared__ unsigned char sharedmem[BLOCK_SIZE + 2][BLOCK_SIZE + 2][3];
+
+    bool is_x_left = ( 0 == threadIdx.x);
+    bool is_x_right = ( (BLOCK_SIZE - 1) == threadIdx.x);
+    bool is_y_top = ( 0 == threadIdx.y);
+    bool is_y_bottom = ( (BLOCK_SIZE - 1 ) == threadIdx.y);
+
+    if(is_x_left){
+        if(x > 0)
+        {
+            for(size_t ch = 0; ch < channels; ++ch)
+            {
+                sharedmem[threadIdx.x][threadIdx.y + 1][ch] = inputImage[y * imageWidth * channels + (x - 1) * channels + ch];
+            }
+        }
+        else{
+            for(size_t ch = 0; ch < channels; ++ch)
+            {
+                sharedmem[threadIdx.x][threadIdx.y + 1][ch] = 0;
+            }
+        }
+    }
+    else if(is_x_right){
+        if(x < (imageWidth - 1))
+        {
+            for(size_t ch = 0; ch < channels; ++ch)
+            {
+                sharedmem[threadIdx.x + 2][threadIdx.y + 1][ch] = inputImage[y * imageWidth * channels + (x + 1) * channels + ch];;
+            }
+
+        }
+        else
+        {
+            for(size_t ch = 0; ch < channels; ++ch)
+            {
+                sharedmem[threadIdx.x + 2][threadIdx.y + 1][ch] = 0;
+            }
+        }
+    }
+    if (is_y_top){
+        if(y > 0)
+        {
+            for(size_t ch = 0; ch < channels; ++ch)
+            {
+                sharedmem[threadIdx.x + 1][threadIdx.y][ch] = inputImage[(y - 1) * imageWidth * channels + x * channels + ch];
+            }
+            if(is_x_left)
+            {
+                for(size_t ch = 0; ch < channels; ++ch)
+                {
+                    sharedmem[threadIdx.x][threadIdx.y][ch] = inputImage[(y - 1) * imageWidth * channels + (x - 1) * channels + ch];    
+                    
+                }
+            }
+            else if(is_x_right)
+            {
+                for(size_t ch = 0; ch < channels; ++ch)
+                {
+                    sharedmem[threadIdx.x + 2][threadIdx.y][ch] = inputImage[(y - 1) * imageWidth * channels + (x + 1) * channels + ch];;
+                }   
+            }
+        }
+        else
+        {
+            for(size_t ch = 0; ch < channels; ++ch)
+            {
+                sharedmem[threadIdx.x + 1][threadIdx.y][ch] = 0;
+            }
+            if(is_x_left)
+            {
+                for(size_t ch = 0; ch < channels; ++ch)
+                {
+                    sharedmem[threadIdx.x][threadIdx.y][ch] = 0;
+                }
+            }
+            else if(is_x_right)
+            {
+                for(size_t ch = 0; ch < channels; ++ch)
+                {
+                    sharedmem[threadIdx.x + 2][threadIdx.y][ch] = 0;
+                }   
+            }
+        }
+	}
+	else if (is_y_bottom){
+        if(y < (imageHeight - 1))
+        {
+            for(size_t ch = 0; ch < channels; ++ch)
+            {
+                sharedmem[threadIdx.x + 1][threadIdx.y + 2][ch] = inputImage[(y + 1) * imageWidth * channels + x * channels + ch];
+            }
+            if(is_x_left)
+            {
+                for(size_t ch = 0; ch < channels; ++ch)
+                {
+                    sharedmem[threadIdx.x][threadIdx.y + 2][ch] = inputImage[(y + 1) * imageWidth * channels + (x - 1)* channels + ch];
+                }
+            }
+            else if(is_x_right)
+            {
+                for(size_t ch = 0; ch < channels; ++ch)
+                {
+                    sharedmem[threadIdx.x + 2][threadIdx.y + 2][ch] = inputImage[(y + 1) * imageWidth * channels + (x + 1)* channels + ch];;
+                }
+            }
+        }
+        else
+        {
+            for(size_t ch = 0; ch < channels; ++ch)
+            {
+                sharedmem[threadIdx.x + 1][threadIdx.y + 2][ch] = 0;
+            }
+            if(is_x_left)
+            {
+                for(size_t ch = 0; ch < channels; ++ch)
+                {
+                    sharedmem[threadIdx.x][threadIdx.y + 2][ch] = 0;
+                }
+            }
+            else if(is_x_right)
+            {
+                for(size_t ch = 0; ch < channels; ++ch)
+                {
+                    sharedmem[threadIdx.x + 2][threadIdx.y + 2][ch] = 0;
+                }
+            }
+        }
+	}
+
+    for(size_t ch = 0; ch < channels; ++ch)
+    {
+        sharedmem[threadIdx.x + 1][threadIdx.y + 1][ch] = inputImage[y * imageWidth * channels + x * channels + ch];
+    }
+    
+    __syncthreads();
+
+    uchar *window = new uchar[windowWidth * windowsHeight];
+
+    for(size_t ch = 0; ch < channels; ++ch)
+    {
+        size_t iterator = 0;
+        for (size_t col = threadIdx.x; col <= threadIdx.x + 2; ++col)
+        {
+            for(size_t row = threadIdx.y; row <= threadIdx.y + 2; ++row)
+            {
+                window[iterator] = sharedmem[col][row][ch]; 
+                ++iterator;
+            }
+        }
+        // bubble sort
+        for(size_t i = 0; i < windowWidth * windowsHeight; ++i){
+            for(size_t j = i + 1; j < windowWidth * windowsHeight; ++j){
+                if( window[i] > window[j] ){
+                    uchar tmp = window[i];
+                    window[i] = window[j];
+                    window[j] = tmp; 
+                }
+            }
+        }
+        outputImage[y * imageWidth * channels + x * channels + ch] = window[(windowWidth * windowsHeight) / 2];
+    }
+
+    delete window;
+    __syncthreads();
 }
 
 int main(int argc, char** argv)
@@ -118,7 +289,7 @@ int main(int argc, char** argv)
         // const dim3 grid (((width % BLOCK_WIDTH) != 0) ? (width / BLOCK_WIDTH + 1) : (width / BLOCK_WIDTH), ((height % BLOCK_HEIGHT) != 0) ? (height / BLOCK_HEIGHT + 1) : (height / BLOCK_HEIGHT), 1);
         // const dim3 block ((int)ceil((float)width / (float)BLOCK_WIDTH), (int)ceil((float)height / (float)BLOCK_HEIGHT));
 
-        const dim3 block(BLOCK_WIDTH,BLOCK_WIDTH);
+        const dim3 block(BLOCK_SIZE,BLOCK_SIZE);
         const dim3 grid(cv::cuda::device::divUp(width, block.x), cv::cuda::device::divUp(height, block.y));
 
         cudaEventCreate(&start);
@@ -128,6 +299,12 @@ int main(int argc, char** argv)
         medianFilter<<<grid, block>>>(inputImageDevice, outputImageDevice, width, height, channels, window_cols,  window_rows);
         status = cudaGetLastError(); 
 
+        cudaEventRecord(stop, 0);
+        cudaEventSynchronize(stop);
+        cudaEventElapsedTime(&time, start, stop);
+        
+        std::cout << "GPU time in milliseconds: " << time << " ms" << std::endl;
+
         cudaMemcpy(inputImageDevice, img.ptr(), imageSize, cudaMemcpyHostToDevice);
         status = cudaGetLastError();
         if (status != cudaSuccess) {                     
@@ -136,14 +313,38 @@ int main(int argc, char** argv)
             return -1;
         }
 
-
-        cudaEventRecord(stop, 0);
-        cudaEventSynchronize(stop);
-        cudaEventElapsedTime(&time, start, stop);
-
-        std::cout << "GPU time in milliseconds: " << time << " ms" << std::endl;
         
-        cudaMemcpy(outputImageHost, outputImageDevice, imageSize, cudaMemcpyDeviceToHost);
+        if(3 == window_cols && 3 == window_rows && channels <= 3)
+        {
+            cudaEventCreate(&start);
+            cudaEventCreate(&stop);
+            cudaEventRecord(start, 0);
+    
+            medianFilterShared<<<grid, block>>>(inputImageDevice, outputImageDevice, width, height, channels, window_cols,  window_rows);
+            status = cudaGetLastError(); 
+    
+            cudaEventRecord(stop, 0);
+            cudaEventSynchronize(stop);
+            cudaEventElapsedTime(&time, start, stop);
+    
+            cudaMemcpy(inputImageDevice, img.ptr(), imageSize, cudaMemcpyHostToDevice);
+            status = cudaGetLastError();
+            if (status != cudaSuccess) {                     
+                std::cout << "Shared memory kernel function failed: " << cudaGetErrorString(status) << std::endl;
+                cudaFree(inputImageDevice);
+                return -1;
+            }
+    
+            std::cout << "GPU time for shared memory in milliseconds: " << time << " ms" << std::endl;
+            
+            cudaMemcpy(outputImageHost, outputImageDevice, imageSize, cudaMemcpyDeviceToHost);
+            status = cudaGetLastError();
+            if (status != cudaSuccess) {                     
+                std::cout << "Kernel failed for cudaMemcpy cudaMemcpyHostToDevice: " << cudaGetErrorString(status) << std::endl;
+                cudaFree(inputImageDevice);
+                return -1;
+            }
+        }
 
         cv::Mat output_image = cv::Mat(height, width, img.type(), outputImageHost);
 
