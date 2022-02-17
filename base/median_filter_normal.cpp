@@ -51,7 +51,7 @@ int main(int argc, char** argv)
                     uchar temp[window_rows * window_cols] = {0};
                     for(size_t x = 0; x < window_rows; ++x){
                         for(size_t y = 0; y < window_cols; ++y){
-                            temp[x * window_cols + y] = image_uchar[(row + x - 1) * width * channels + (col + y - 1) * channels + ch];
+                            temp[x * window_cols + y] = image_uchar[(row + x - window_rows / 2) * width * channels + (col + y - window_cols / 2) * channels + ch];
                         }
                     }
                     bubbleSort(temp, window_rows * window_cols);

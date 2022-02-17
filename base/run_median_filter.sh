@@ -9,4 +9,4 @@ cd $HOME/median-filter/base
 module -q add plgrid/libs/opencv
 module -q add plgrid/tools/gcc/8.2.0
 make
-./median_filter_normal
+./median_filter_normal 3 3 ../lena_noise3.png

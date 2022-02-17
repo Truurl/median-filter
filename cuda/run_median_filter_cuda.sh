@@ -11,4 +11,6 @@ cd $HOME/median-filter/cuda
 module -q add plgrid/libs/opencv
 module -q add plgrid/apps/cuda
 make
-./median_filter_cuda 3 3 ../lena_noise.png
+./median_filter_cuda ../lena_noise1.png
+./median_filter_cuda ../lena_noise2.png
+./median_filter_cuda ../lena_noise3.png

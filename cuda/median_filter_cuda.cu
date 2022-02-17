@@ -8,7 +8,7 @@
 #include "opencv2/cudaimgproc.hpp"
 #include "opencv2/imgcodecs.hpp"
 
-#define BLOCK_SIZE (64)
+#define BLOCK_SIZE (32)
 
 void bubbleSort(uchar* buffer, size_t bufferSize)
 {
@@ -46,15 +46,19 @@ __global__ void medianFilter(unsigned char* inputImage, unsigned char* outputIma
                     ++iterator;
                 }
             }
-            // bubble sort
-            for(size_t i = 0; i < windowWidth * windowsHeight; ++i){
-                for(size_t j = i + 1; j < windowWidth * windowsHeight; ++j){
-                    if( window[i] > window[j] ){
-                        uchar tmp = window[i];
-                        window[i] = window[j];
-                        window[j] = tmp; 
-                    }
+
+            for (int i = 0; i < (1 + (windowWidth * windowsHeight) / 2); ++i) {
+
+                // --- Find the position of the minimum element
+                int minval = i;
+                for (int l = i + 1; l < (windowWidth * windowsHeight); ++l) 
+                {
+                    if (window[l] < window[minval]) minval=l;
                 }
+                // --- Put found minimum element in its place
+                unsigned char temp = window[i];
+                window[i]=window[minval];
+                window[minval]=temp;
             }
             outputImage[y * imageWidth * channels + x * channels + ch] = window[(windowWidth * windowsHeight) / 2];
         }
@@ -236,10 +240,10 @@ __global__ void medianFilterShared(unsigned char* inputImage, unsigned char* out
 
 int main(int argc, char** argv)
 {
-    if(argc >= 4)
+    if(argc >= 2)
     {
         cv::Mat img;
-        img = cv::imread(argv[3]);
+        img = cv::imread(argv[1]);
 
         if(img.empty())
         {
@@ -247,8 +251,8 @@ int main(int argc, char** argv)
             return -1;
         }
 
-        unsigned int window_rows{(unsigned int) std::stoul(argv[1])};
-        unsigned int window_cols{(unsigned int) std::stoul(argv[2])};
+        unsigned int window_rows{3};
+        unsigned int window_cols{3};
 
         int width = img.cols;
         int height = img.rows;
@@ -348,9 +352,9 @@ int main(int argc, char** argv)
 
         cv::Mat output_image = cv::Mat(height, width, img.type(), outputImageHost);
 
-        if(5 == argc)
+        if(3 == argc)
         {
-            cv::imwrite(argv[4], output_image);
+            cv::imwrite(argv[3], output_image);
         }
         else
         {
