@@ -1,13 +1,14 @@
 #!/bin/bash -l
-#SBATCH -J median_filter_job
+#SBATCH -J mpi_median_filter_job
 #SBATCH -N 1
-#SBATCH --ntasks-per-node=1
+#SBATCH --ntasks-per-node=8
 #SBATCH --time=00:10:00
 #SBATCH -p plgrid-testing
-#SBATCH --output=median_filter.out
-cd $HOME/median-filter/base
+#SBATCH --output=mpi_median_filter.out
+cd $HOME/median-filter/mpi
 module -q add plgrid/libs/opencv
-module -q add plgrid/tools/intel/2021.3.0
-sleep 10
+module -q add plgrid/tools/openmpi
 make
-./median_filter_normal
+mpiexec -np 2 ./median_filter_mpi
+mpiexec -np 4 ./median_filter_mpi
+mpiexec -np 8 ./median_filter_mpi
